@@ -1,0 +1,90 @@
+- name: Download and install aiopsctl
+  ansible.builtin.get_url:
+    url: https://github.com/IBM/aiopsctl/releases/download/v{{ aiops_version }}/aiopsctl-linux_amd64.tar.gz
+    dest: /tmp/aiopsctl-linux_amd64.tar.gz
+    mode: '0755'
+  register: download_aiopsctl
+  tags: aiopsctl
+
+- name: Extract aiopsctl and install
+  ansible.builtin.unarchive:
+    src: /tmp/aiopsctl-linux_amd64.tar.gz
+    dest: /usr/local/bin/
+    remote_src: yes
+    mode: '0755'
+  when: download_aiopsctl.changed
+  tags: aiopsctl
+
+- name: Verify aiopsctl installation
+  ansible.builtin.command: /usr/local/bin/aiopsctl version
+  register: aiopsctl_version
+  changed_when: false
+  tags: aiopsctl
+
+- name: Display aiopsctl version
+  ansible.builtin.debug:
+    msg: "aiopsctl version: {{ aiopsctl_version.stdout }}"
+  tags: aiopsctl  
+
+# Disable nm-cloud-setup.service to avoid conflicts with k3s
+# k3s won't run with nm-cloud-setup enabled
+#systemctl stop nm-cloud-setup.timer
+#systemctl disable nm-cloud-setup.timer 
+#systemctl stop nm-cloud-setup.service
+#systemctl disable nm-cloud-setup.service
+- name: Collect package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  tags: aiopsctl  
+
+- name: Disable network manager
+  block:
+  - name: Disable nm-cloud-setup.service to avoid conflicts with docker
+    ansible.builtin.systemd_service:
+      name: nm-cloud-setup
+      state: stopped
+      enabled: false
+  - name: Disable nm-cloud-setup.timer to avoid conflicts with docker
+    ansible.builtin.systemd_service:
+      name: nm-cloud-setup.timer
+      state: stopped
+      enabled: false
+  when: ansible_facts['os_family'] == 'RedHat' and 'NetworkManager-cloud-setup' in ansible_facts.packages
+  tags: aiopsctl  
+
+- name: Install bind-utils
+  ansible.builtin.package:
+    name: bind-utils
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat' and (inventory_hostname in groups['servers'])
+  tags: aiopsctl
+
+- name: Verify DNS resolution of k3s_url
+  ansible.builtin.command: "dig +short {{ k3s_url }}"
+  register: dig_k3s_url
+  changed_when: false
+  failed_when: dig_k3s_url.stdout == ""
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  tags: aiopsctl
+
+- name: Install k3s using aiopsctl
+  ansible.builtin.command: >
+    /usr/local/bin/aiopsctl install k3s
+    --version {{ aiops_version }}
+    --server-url https://{{ k3s_url }}:6443
+    --token {{ k3s_token }}
+    --with-harbor
+    --with-ingress
+    --with-certmanager
+    --with-traefik
+    --with-metrics-server
+    --with-flannel-wireguard
+    --with-rancher
+    --rancher-admin-password P@ssw0rd!
+    {% if mailcow_enabled %}
+    --with-mailcow
+    {% endif %}
+  args:
+    creates: /etc/rancher/k3s/k3s.yaml
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  tags: aiopsctl

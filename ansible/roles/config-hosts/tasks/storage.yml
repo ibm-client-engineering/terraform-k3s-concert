@@ -1,0 +1,108 @@
+# Make sure lvm is installed
+- name: Install LVM2
+  ansible.builtin.package:
+    name: lvm2
+    state: present
+  tags: storage
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+
+- name: Get all disks (filter out loop and part)
+  ansible.builtin.command: lsblk -dn -o NAME,TYPE
+  register: raw_disks
+  tags: storage
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+
+- name: Do the storage dance
+  block:
+  - name: Filter for unpartitioned physical disks
+    set_fact:
+      disk_list: >-
+        {{
+          raw_disks.stdout_lines
+          | map('split')
+          | selectattr('1', 'equalto', 'disk')
+          | map('first')
+          | list
+        }}
+
+  - name: Check if disks have partitions
+    ansible.builtin.command: lsblk /dev/{{ item }} -n -o TYPE
+    register: disk_parts
+    loop: "{{ disk_list }}"
+    changed_when: false
+
+  - name: Filter disks without partitions
+    set_fact:
+      unpartitioned_disks: >-
+        {{
+          disk_list
+          | zip(disk_parts.results)
+          | selectattr('1.stdout_lines', 'equalto', ['disk'])
+          | map('first')
+          | list
+        }}
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  tags: storage
+
+- name: Partition and create PV on unpartitioned disks
+  block:
+  - name: Create GPT partition table
+    ansible.builtin.command: "parted /dev/{{ item }} --script mklabel gpt"
+    loop: "{{ unpartitioned_disks }}"
+
+  - name: Create primary partition
+    ansible.builtin.command: "parted /dev/{{ item }} --script mkpart primary 0% 100%"
+    loop: "{{ unpartitioned_disks }}"
+
+  - name: Run partprobe to refresh partition table
+    ansible.builtin.command: "partprobe /dev/{{ item }}"
+    loop: "{{ unpartitioned_disks }}"
+
+  - name: Create physical volume on new partition
+    ansible.builtin.command: "pvcreate /dev/{{ item }}1"
+    loop: "{{ unpartitioned_disks }}"
+
+  - name: Create list of physical volume paths
+    set_fact:
+      created_pvs: "{{ created_pvs | default([]) + [ '/dev/' + item + '1' ] }}"
+    loop: "{{ unpartitioned_disks }}"
+
+  when: unpartitioned_disks | length > 0 and (inventory_hostname in groups['servers'] or inventory_hostname in groups['agents'])
+  tags: storage
+
+- name: Hande the pvs and vgs
+  block:
+  - name: Create volume group using created PVs
+    community.general.lvg:
+      vg: "{{ vg_group }}"
+      pvs: "{{ created_pvs | default([]) }}"
+    when: created_pvs is defined and created_pvs | length > 0
+
+  - name: Check if LV exists because the community lvol module is dumb
+    command: "lvs --noheadings -o lv_name {{ vg_group }}"
+    register: lv_list
+    changed_when: false
+    failed_when: false
+
+  - name: Create storage lv
+    community.general.lvol:
+      vg: "{{ vg_group }}"
+      lv: k3s_lv
+      size: 100%FREE
+    when: "'k3s_lv' not in lv_list.stdout"
+
+  - name: Create filesystem k3s rancher
+    community.general.filesystem:
+      fstype: xfs
+      dev: /dev/{{ vg_group }}/k3s_lv
+
+  - name: Mount storage filesystem
+    ansible.posix.mount:
+      path: /var/lib/rancher
+      src: /dev/{{ vg_group }}/k3s_lv
+      fstype: xfs
+      opts: defaults
+      state: mounted
+
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  tags: storage

@@ -1,0 +1,85 @@
+- name: Download the k3s install script
+  ansible.builtin.get_url:
+    url: "{{ k3s_install_script_url }}"
+    dest: /usr/local/bin/k3s_install.sh
+    mode: '0755'
+  register: download_k3s_install 
+  tags: k3s
+
+- name: Collect package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  tags: k3s  
+
+- name: Disable network manager
+  block:
+  - name: Disable nm-cloud-setup.service to avoid conflicts with docker
+    ansible.builtin.systemd_service:
+      name: nm-cloud-setup
+      state: stopped
+      enabled: false
+  - name: Disable nm-cloud-setup.timer to avoid conflicts with docker
+    ansible.builtin.systemd_service:
+      name: nm-cloud-setup.timer
+      state: stopped
+      enabled: false
+  when: ansible_facts['os_family'] == 'RedHat' and 'NetworkManager-cloud-setup' in ansible_facts.packages
+  tags: k3s  
+
+- name: Install bind-utils
+  ansible.builtin.package:
+    name: bind-utils
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat' and (inventory_hostname in groups['servers'])
+  tags: k3s
+
+- name: Verify DNS resolution of k3s_url
+  ansible.builtin.command: "dig +short {{ k3s_url }}"
+  register: dig_k3s_url
+  changed_when: false
+  failed_when: dig_k3s_url.stdout == ""
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  tags: k3s
+
+- name: Install k3s on the servers using the install script
+  block:
+  - name: Install k3s primary server
+    ansible.builtin.command: >
+      /usr/local/bin/k3s_install.sh server
+      --cluster-init
+      --server https://{{ k3s_url }}:6443
+      --token {{ k3s_token }}
+      --disable=traefik
+    when: hostvars[inventory_hostname]['primary'] is true
+
+  - name: Install k3s standby servers
+    ansible.builtin.command: >
+      /usr/local/bin/k3s_install.sh server
+      --server https://{{ k3s_url }}:6443
+      --token {{ k3s_token }}
+    when: hostvars[inventory_hostname]['primary'] is not true
+  when: inventory_hostname in groups['servers']
+  tags: k3s 
+
+
+# - name: Install k3s 
+#   ansible.builtin.command: >
+#     /usr/local/bin/k3s_install.sh install k3s
+#     --version {{ aiops_version }}
+#     --server-url https://{{ k3s_url }}:6443
+#     --token {{ k3s_token }}
+#     --with-harbor
+#     --with-ingress
+#     --with-certmanager
+#     --with-traefik
+#     --with-metrics-server
+#     --with-flannel-wireguard
+#     --with-rancher
+#     --rancher-admin-password P@ssw0rd!
+#     {% if mailcow_enabled %}
+#     --with-mailcow
+#     {% endif %}
+#   args:
+#     creates: /etc/rancher/k3s/k3s.yaml
+#   when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+#   tags: aiopsctl

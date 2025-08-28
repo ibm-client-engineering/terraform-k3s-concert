@@ -1,0 +1,43 @@
+# We'll pass these on cli or vault
+
+rhsm_user: ''
+rhsm_pass: ''
+aiops_version: '4.10.1'
+mailcow_enabled: false
+# rhsm_user: 'myuser'
+# rhsm_pass: 'mypassword'
+
+firewall_ports_server:
+  - 6443/tcp   # Kubernetes API server
+  - 80/tcp     # HTTP
+  - 443/tcp    # HTTPS
+  - 8472/udp   # Flannel VXLAN networking
+  - 10250/tcp # Kubelet API
+  - 2379-2380/tcp # etcd server client API
+  - 5001/tcp # Harbor
+
+firewall_ports_agent:
+  - 8472/udp   # Flannel VXLAN networking
+  - 51820/udp  # flannel Wireguard networking
+  - 51821/udp  # flannel Wireguard networking
+  - 10250/tcp # Kubelet API
+  - 5001/tcp # Harbor
+
+firewall_trusted:
+  - 10.42.0.0/16  # Flannel network
+  - 10.43.0.0/16  # service network
+
+vg_group: "k3s_vg"
+
+k3s_url: "haproxy.gym.lan"
+# We can generate this token later if we want. For now, hardcode it.
+k3s_token: "P@ssw0rd!"
+
+k3s_install_script_url: "https://get.aiopsctl.io"
+
+# Skip SELinux stuff for now. We'll turn off SELinux when we install and then restorecon the k3s binary
+k3s_server_env:
+  INSTALL_K3S_EXEC: "server --token {{ k3s_token }}" 
+  K3S_TOKEN: "{{ k3s_token }}"
+  K3S_URL: "https://{{ k3s_url }}:6443"
+  INSTALL_K3S_SKIP_SELINUX_RPM: "true"
