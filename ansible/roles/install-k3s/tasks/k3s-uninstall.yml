@@ -1,0 +1,15 @@
+- name: Uninstall the cluster when invoked via tags
+  block:
+  - name: uninstall k3s from servers
+    ansible.builtin.command: /usr/local/bin/k3s-uninstall.sh
+    when: inventory_hostname in groups['servers']
+    args:
+      removes: /usr/local/bin/k3s-uninstall.sh
+
+  - name: uninstall k3s from agents
+    ansible.builtin.command: /usr/local/bin/k3s-agent-uninstall.sh
+    when: inventory_hostname in groups['agents']
+    args:
+      removes: /usr/local/bin/k3s-agent-uninstall.sh
+  when: "'k3s-uninstall' in ansible_run_tags"
+  tags: k3s-uninstall
