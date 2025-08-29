@@ -33,11 +33,14 @@ k3s_url: "haproxy.gym.lan"
 # We can generate this token later if we want. For now, hardcode it.
 k3s_token: "P@ssw0rd!"
 
-k3s_install_script_url: "https://get.aiopsctl.io"
+k3s_install_script_url: "https://get.k3s.io"
+
+k3s_selinux: "false"
+
+domain: "gym.lan"
 
 # Skip SELinux stuff for now. We'll turn off SELinux when we install and then restorecon the k3s binary
-k3s_server_env:
-  INSTALL_K3S_EXEC: "server --token {{ k3s_token }}" 
-  K3S_TOKEN: "{{ k3s_token }}"
-  K3S_URL: "https://{{ k3s_url }}:6443"
-  INSTALL_K3S_SKIP_SELINUX_RPM: "true"
+install_k3s_exec:
+  primary_env: "server --tls-san {{ k3s_url }} --selinux={{ k3s_selinux }} --disable=traefik"
+  standby_env: "server --selinux={{ k3s_selinux }}"
+  agent_env: "agent --selinux={{ k3s_selinux }}"

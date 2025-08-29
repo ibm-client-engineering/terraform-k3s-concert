@@ -1,3 +1,19 @@
+- name: Temporarily disable SELinux if it's enforcing
+  block:
+  - name: Check SELinux status
+    ansible.builtin.command: getenforce
+    register: selinux_status
+
+  - name: Disable SELinux if enforcing
+    ansible.builtin.command: setenforce 0
+    when: selinux_status.stdout == "Enforcing"
+
+  - name: Set a fact to carry around the SELinux status
+    ansible.builtin.set_fact:
+      selinux_was_enforcing: "{{ selinux_status.stdout == 'Enforcing' }}"
+  when: k3s_selinux == "false"
+  tags: k3s
+
 - name: Download the k3s install script
   ansible.builtin.get_url:
     url: "{{ k3s_install_script_url }}"
@@ -33,53 +49,77 @@
   when: ansible_facts['os_family'] == 'RedHat' and (inventory_hostname in groups['servers'])
   tags: k3s
 
-- name: Verify DNS resolution of k3s_url
-  ansible.builtin.command: "dig +short {{ k3s_url }}"
-  register: dig_k3s_url
-  changed_when: false
-  failed_when: dig_k3s_url.stdout == ""
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+- name: DEBUG primary host logic
+  debug:
+    msg: "Primary? {{ hostvars[inventory_hostname]['primary'] | default(false) }}"
+  when: inventory_hostname in groups['servers']
   tags: k3s
 
-- name: Install k3s on the servers using the install script
+- name: Install k3s primary server
+  ansible.builtin.command: >
+    /usr/local/bin/k3s_install.sh server
+  environment:
+#    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ k3s_selinux == 'false' | ternary('true', 'false') }}"
+    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ 'true' if k3s_selinux == 'false' else 'false' }}"
+    INSTALL_K3S_EXEC: "{{ install_k3s_exec.primary_env }}"
+    K3S_CLUSTER_INIT: "true"
+    K3S_TOKEN: "{{ k3s_token }}"
+    K3S_KUBECONFIG_MODE: "644"
+  when:
+    - inventory_hostname in groups['servers']
+    - hostvars[inventory_hostname]['primary'] | default(false) | bool
+  args:
+    creates: /etc/rancher/k3s/k3s.yaml
+  tags: k3s, k3s-primary
+
+- name: Wait for K3s API to become reachable
+  ansible.builtin.wait_for:
+    host: "{{ k3s_url }}"
+    port: 6443
+    delay: 5
+    timeout: 300
+    state: started
+  when:
+    - inventory_hostname in groups['k3s_cluster'] and hostvars[inventory_hostname]['primary'] is false
+  tags: k3s, k3s-standby
+
+- name: Install k3s standby servers
+  ansible.builtin.command: >
+    /usr/local/bin/k3s_install.sh server
+  environment:
+#    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ k3s_selinux == 'false' | ternary('true', 'false') }}"
+    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ 'true' if k3s_selinux == 'false' else 'false' }}"
+    INSTALL_K3S_EXEC: "{{ install_k3s_exec.standby_env }}"
+    K3S_URL: "https://{{ k3s_url }}:6443"
+    K3S_TOKEN: "{{ k3s_token }}"
+    K3S_KUBECONFIG_MODE: "644"
+  when:
+    - inventory_hostname in groups['servers']
+    - not hostvars[inventory_hostname]['primary'] | default(false) | bool
+  args:
+    creates: /etc/rancher/k3s/k3s.yaml
+  tags: k3s, k3s-standby
+
+- name: Install k3s on the agents using the install script
+  ansible.builtin.command: >
+    /usr/local/bin/k3s_install.sh
+  environment:
+#    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ k3s_selinux == 'false' | ternary('true', 'false') }}"
+    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ 'true' if k3s_selinux == 'false' else 'false' }}"
+    INSTALL_K3S_EXEC: "{{ install_k3s_exec.agent_env }}"
+    K3S_URL: "https://{{ k3s_url }}:6443"
+    K3S_TOKEN: "{{ k3s_token }}"
+  when: inventory_hostname in groups['agents']
+  args:
+    creates: /usr/local/bin/k3s
+  tags: k3s
+
+- name: Re-enable SELinux if it was enforcing
   block:
-  - name: Install k3s primary server
-    ansible.builtin.command: >
-      /usr/local/bin/k3s_install.sh server
-      --cluster-init
-      --server https://{{ k3s_url }}:6443
-      --token {{ k3s_token }}
-      --disable=traefik
-    when: hostvars[inventory_hostname]['primary'] is true
+  - name: Restorecon the k3s binary
+    ansible.builtin.command: restorecon -v /usr/local/bin/k3s
 
-  - name: Install k3s standby servers
-    ansible.builtin.command: >
-      /usr/local/bin/k3s_install.sh server
-      --server https://{{ k3s_url }}:6443
-      --token {{ k3s_token }}
-    when: hostvars[inventory_hostname]['primary'] is not true
-  when: inventory_hostname in groups['servers']
-  tags: k3s 
-
-
-# - name: Install k3s 
-#   ansible.builtin.command: >
-#     /usr/local/bin/k3s_install.sh install k3s
-#     --version {{ aiops_version }}
-#     --server-url https://{{ k3s_url }}:6443
-#     --token {{ k3s_token }}
-#     --with-harbor
-#     --with-ingress
-#     --with-certmanager
-#     --with-traefik
-#     --with-metrics-server
-#     --with-flannel-wireguard
-#     --with-rancher
-#     --rancher-admin-password P@ssw0rd!
-#     {% if mailcow_enabled %}
-#     --with-mailcow
-#     {% endif %}
-#   args:
-#     creates: /etc/rancher/k3s/k3s.yaml
-#   when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
-#   tags: aiopsctl
+  - name: Re-enable SELinux
+    ansible.builtin.command: setenforce 1
+  when: (k3s_selinux | string == "false") and (selinux_was_enforcing | default(false) | bool)
+  tags: k3s
