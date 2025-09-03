@@ -6,6 +6,13 @@
   tags: storage
   when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
 
+- name: Also install nfs-utils for storage
+  ansible.builtin.package:
+    name: nfs-utils
+    state: present
+  tags: storage
+  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+
 - name: Get all disks (filter out loop and part)
   ansible.builtin.command: lsblk -dn -o NAME,TYPE
   register: raw_disks

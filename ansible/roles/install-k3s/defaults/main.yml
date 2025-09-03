@@ -1,2 +1,6 @@
 ---
 # defaults file for install-k3s
+checksum_interface: flannel.1
+
+checksum_script_path: /usr/local/bin/disable-tx-offload.sh
+checksum_service_name: disable-tx-offload

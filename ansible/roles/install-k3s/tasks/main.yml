@@ -5,6 +5,11 @@
   when: inventory_hostname in groups['k3s_cluster']
   tags: k3s
 
+- name: Create the disable-tx-offload script from template
+  include_tasks: interface.yml
+  when: inventory_hostname in groups['k3s_cluster']
+  tags: interface
+
 - name: Uninstall k3s when invoked via tags
   include_tasks: k3s-uninstall.yml
   when: inventory_hostname in groups['k3s_cluster'] and "'k3s-uninstall' in ansible_run_tags"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Disable TX checksum offload on {{ checksum_interface }}
+After=network-online.target k3s.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ checksum_script_path }}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

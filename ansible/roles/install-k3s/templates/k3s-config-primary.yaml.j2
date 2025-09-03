@@ -1,0 +1,8 @@
+write-kubeconfig-mode: "0644"
+tls-san:
+  - "{{ k3s_url }}"
+disable:
+  - "traefik"
+selinux: {{ k3s_selinux | lower }}
+token: "{{ k3s_token }}"
+cluster-init: true

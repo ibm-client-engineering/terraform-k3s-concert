@@ -1,0 +1,24 @@
+- name: Do the disable TX checksum offload dance
+  block:
+  - name: Ensure script to disable TX checksum offload exists
+    template:
+      src: disable-tx-offload.sh.j2
+      dest: "{{ checksum_script_path }}"
+      mode: '0755'
+
+  - name: Install systemd unit to run the script on boot
+    template:
+      src: disable-tx-offload.service.j2
+      dest: "/etc/systemd/system/{{ checksum_service_name }}.service"
+      mode: '0644'
+
+  - name: Reload systemd
+    command: systemctl daemon-reload
+    changed_when: true
+
+  - name: Enable and start checksum offload disable service
+    systemd:
+      name: "{{ checksum_service_name }}"
+      enabled: yes
+      state: started
+  tags: interface

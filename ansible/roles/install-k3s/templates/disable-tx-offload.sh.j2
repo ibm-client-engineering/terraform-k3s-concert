@@ -1,0 +1,11 @@
+#!/bin/bash
+# Wait for the flannel.1 interface to be up
+for i in {1..30}; do
+  if ip link show {{ checksum_interface }} >/dev/null 2>&1; then
+    ethtool -K {{ checksum_interface }} tx-checksum-ip-generic off
+    exit 0
+  fi
+  sleep 1
+done
+echo "{{ checksum_interface }} interface not found"
+exit 1

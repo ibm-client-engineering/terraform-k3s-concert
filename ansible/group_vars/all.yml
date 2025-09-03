@@ -41,6 +41,6 @@ domain: "gym.lan"
 
 # Skip SELinux stuff for now. We'll turn off SELinux when we install and then restorecon the k3s binary
 install_k3s_exec:
-  primary_env: "server --tls-san {{ k3s_url }} --selinux={{ k3s_selinux }} --disable=traefik"
+#  primary_env: "server --tls-san {{ k3s_url }} --selinux {{ k3s_selinux }} --disable traefik"
   standby_env: "server --selinux={{ k3s_selinux }}"
   agent_env: "agent --selinux={{ k3s_selinux }}"
