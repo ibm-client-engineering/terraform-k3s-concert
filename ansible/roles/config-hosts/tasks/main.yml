@@ -13,6 +13,6 @@
   - name: Open Firewall ports
     include_tasks: firewall.yml
     tags: firewall
-
-  when: inventory_hostname in groups['k3s_cluster']
+# Might be redundant with the k3s role doing this
+  when: "'k3s_cluster' in group_names or 'nfs' in group_names"
 #  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']

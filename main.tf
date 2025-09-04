@@ -61,6 +61,8 @@ resource "local_file" "ansible_inventory" {
     server_ips = local.server_ips
     agent_ips  = local.agent_ips
     mailcow_ip = var.mailcow_ip
+    nfs_server_ip = var.nfs_server_ip
     use_mailcow = var.use_mailcow
+    use_nfs = var.use_nfs
   })
 }

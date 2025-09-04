@@ -1,23 +1,36 @@
 # Make sure lvm is installed
-- name: Install LVM2
-  ansible.builtin.package:
-    name: lvm2
-    state: present
-  tags: storage
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
 
-- name: Also install nfs-utils for storage
-  ansible.builtin.package:
-    name: nfs-utils
-    state: present
+- name: Set volume group name
+  set_fact:
+    vg_group: "{{ 'nfs_vg' if inventory_hostname in groups['nfs'] else 'k3s_vg' }}"
   tags: storage
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
 
-- name: Get all disks (filter out loop and part)
-  ansible.builtin.command: lsblk -dn -o NAME,TYPE
-  register: raw_disks
+- name: Set logical volume name
+  set_fact:
+    lv_vol: "{{ 'nfs_lv' if inventory_hostname in groups['nfs'] else 'k3s_lv' }}"
   tags: storage
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+
+- name: Do the install for storage stuff
+  block:
+  - name: Install LVM2
+    ansible.builtin.package:
+      name: lvm2
+      state: present
+
+  - name: Also install nfs-utils for storage
+    ansible.builtin.package:
+      name: nfs-utils
+      state: present
+#    when: inventory_hostname in groups['nfs']
+    when: "'nfs' in group_names"
+
+  - name: Get all disks (filter out loop and part)
+    ansible.builtin.command: lsblk -dn -o NAME,TYPE
+    register: raw_disks
+    tags: storage
+#  when: inventory_hostname in groups['k3s_cluster'] or inventory_hostname in groups['nfs']
+  when: "'k3s_cluster' in group_names or 'nfs' in group_names"
+  tags: storage
 
 - name: Do the storage dance
   block:
@@ -48,36 +61,55 @@
           | map('first')
           | list
         }}
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+#  when: inventory_hostname in groups['k3s_cluster'] or inventory_hostname in groups['nfs']
+  when: "'k3s_cluster' in group_names or 'nfs' in group_names"
   tags: storage
 
 - name: Partition and create PV on unpartitioned disks
   block:
-  - name: Create GPT partition table
-    ansible.builtin.command: "parted /dev/{{ item }} --script mklabel gpt"
-    loop: "{{ unpartitioned_disks }}"
+  - name: Show unpartitioned disks
+    ansible.builtin.debug:
+      msg: "Unpartitioned disks: {{ unpartitioned_disks }}"
+    when: unpartitioned_disks | length > 0
 
-  - name: Create primary partition
-    ansible.builtin.command: "parted /dev/{{ item }} --script mkpart primary 0% 100%"
+  - name: Create the GPT part table with community module
+    community.general.parted:
+      device: "/dev/{{ item }}"
+      number: 1
+      label: gpt
+      state: present
     loop: "{{ unpartitioned_disks }}"
+#    ignore_errors: true
+    when: unpartitioned_disks | length > 0
 
-  - name: Run partprobe to refresh partition table
-    ansible.builtin.command: "partprobe /dev/{{ item }}"
-    loop: "{{ unpartitioned_disks }}"
+  # - name: Create GPT partition table
+  #   ansible.builtin.command: "parted /dev/{{ item }} --script mklabel gpt"
+  #   loop: "{{ unpartitioned_disks }}"
 
-  - name: Create physical volume on new partition
-    ansible.builtin.command: "pvcreate /dev/{{ item }}1"
-    loop: "{{ unpartitioned_disks }}"
+  # - name: Create primary partition
+  #   ansible.builtin.command: "parted /dev/{{ item }} --script mkpart primary 0% 100%"
+  #   loop: "{{ unpartitioned_disks }}"
+
+  # - name: Run partprobe to refresh partition table
+  #   ansible.builtin.command: "partprobe /dev/{{ item }}"
+  #   loop: "{{ unpartitioned_disks }}"
+
+  # - name: Create physical volume on new partition
+  #   ansible.builtin.command: "pvcreate /dev/{{ item }}1"
+  #   loop: "{{ unpartitioned_disks }}"
 
   - name: Create list of physical volume paths
     set_fact:
       created_pvs: "{{ created_pvs | default([]) + [ '/dev/' + item + '1' ] }}"
     loop: "{{ unpartitioned_disks }}"
 
-  when: unpartitioned_disks | length > 0 and (inventory_hostname in groups['servers'] or inventory_hostname in groups['agents'])
+#  when:
+#      - unpartitioned_disks | length > 0 and inventory_hostname in groups['k3s_cluster']
+#      - unpartitioned_disks | length > 0 and inventory_hostname in groups['nfs']
+  when: "'k3s_cluster' in group_names or 'nfs' in group_names"
   tags: storage
 
-- name: Hande the pvs and vgs
+- name: Handle the pvs and vgs
   block:
   - name: Create volume group using created PVs
     community.general.lvg:
@@ -94,22 +126,75 @@
   - name: Create storage lv
     community.general.lvol:
       vg: "{{ vg_group }}"
-      lv: k3s_lv
+      lv: "{{ lv_vol }}"
       size: 100%FREE
-    when: "'k3s_lv' not in lv_list.stdout"
+    when: "lv_vol not in lv_list.stdout"
 
-  - name: Create filesystem k3s rancher
+  - name: Create filesystem on {{ vg_group }}/{{ lv_vol }}
     community.general.filesystem:
       fstype: xfs
-      dev: /dev/{{ vg_group }}/k3s_lv
+      dev: /dev/{{ vg_group }}/{{ lv_vol }}
 
-  - name: Mount storage filesystem
+  - name: Mount storage filesystem for k3s
     ansible.posix.mount:
       path: /var/lib/rancher
-      src: /dev/{{ vg_group }}/k3s_lv
+      src: /dev/{{ vg_group }}/{{ lv_vol }}
       fstype: xfs
       opts: defaults
       state: mounted
+#    when: inventory_hostname in groups['k3s_cluster']
+    when: "'k3s_cluster' in group_names"
 
-  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
+  - name: Make directory for nfs storage
+    ansible.builtin.file:
+      path: /nfs-share
+      state: directory
+      mode: '2777'
+#      owner: nobody
+#      group: nobody
+#      recurse: true
+#    when: inventory_hostname in groups['nfs']
+    when: "'nfs' in group_names"
+
+  - name: Mount storage filesystem for nfs
+    ansible.posix.mount:
+      path: /nfs-share
+      src: /dev/{{ vg_group }}/{{ lv_vol }}
+      fstype: xfs
+      opts: defaults
+      state: mounted
+#    when: inventory_hostname in groups['nfs']
+    when: "'nfs' in group_names"
+
+  - name: Set the perms for nfs storage
+    ansible.builtin.file:
+      path: /nfs-share
+      mode: '2777'
+      owner: nobody
+      group: nobody
+      recurse: true
+#    when: inventory_hostname in groups['nfs']
+    when: "'nfs' in group_names"
+
+  - name: set the ACL for nfs storage
+    ansible.posix.acl:
+      path: /nfs-share
+#      entity: o
+      etype: other
+      permissions: rwx
+      state: present
+      recursive: true
+    when: "'nfs' in group_names"
+
+#  when: inventory_hostname in groups['k3s_cluster'] or inventory_hostname in groups['nfs']
+  when: "'k3s_cluster' in group_names or 'nfs' in group_names"
+  tags: storage
+
+- name: Export the NFS share
+  ansible.builtin.template:
+    src: exports.j2
+    dest: /etc/exports
+    mode: '0644'
+  notify: Restart NFS
+  when: "'nfs' in group_names"
   tags: storage

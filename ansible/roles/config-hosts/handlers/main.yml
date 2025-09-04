@@ -1,2 +1,9 @@
 ---
 # handlers file for config-hosts
+- name: Restart NFS
+  ansible.builtin.systemd:
+    name: nfs-server
+    state: restarted
+    enabled: true
+  when: "'nfs' in group_names"
+  tags: nfs

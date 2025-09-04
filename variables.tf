@@ -144,6 +144,17 @@ variable "mailcow_ip" {
   default     = "192.168.252.100"
   description = "IP address for the mailcow instance"
 }
+variable "use_nfs" {
+  default     = false
+  type        = bool
+  description = "Create and use an nfs instance for cluster file storage"
+}
+
+variable "nfs_server_ip" {
+  type        = string
+  default     = "192.168.252.7"
+  description = "IP address for the NFS server instance"
+}
 
 variable "pfsense_host" {
   type        = string

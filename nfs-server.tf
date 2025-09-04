@@ -20,7 +20,7 @@ data "cloudinit_config" "nfs-server_userdata" {
 }
 
 resource "vsphere_virtual_machine" "nfs-server" {
-
+  count            = var.use_nfs ? 1 : 0
   name             = "nfs-server"
   resource_pool_id = data.vsphere_resource_pool.target_pool.id
   datastore_id     = data.vsphere_datastore.this.id

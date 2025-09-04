@@ -7,6 +7,10 @@ haproxy ansible_host=192.168.252.9 ansible_user=clouduser
 ${name} ansible_host=${ip} ansible_user=clouduser primary=${name == keys(server_ips)[0]}
 %{ endfor }
 
+[nfs]
+%{ if use_nfs ~}
+nfs-server ansible_host=${nfs_server_ip} ansible_user=clouduser
+%{ endif ~}
 
 [mail]
 %{ if use_mailcow ~}
