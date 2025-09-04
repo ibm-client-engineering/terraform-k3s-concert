@@ -44,3 +44,6 @@ install_k3s_exec:
 #  primary_env: "server --tls-san {{ k3s_url }} --selinux {{ k3s_selinux }} --disable traefik"
   standby_env: "server --selinux={{ k3s_selinux }}"
   agent_env: "agent --selinux={{ k3s_selinux }}"
+
+# Specific versions of stuff
+certmanager_version: "v1.18.2"

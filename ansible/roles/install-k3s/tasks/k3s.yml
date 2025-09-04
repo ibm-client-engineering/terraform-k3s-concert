@@ -143,6 +143,42 @@
     creates: /usr/local/bin/k3s
   tags: k3s
 
+- name: Retrieve the kubeconfig from the primary server
+  ansible.builtin.fetch:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ role_path }}/../../kubeconfig.yaml"
+    flat: yes
+  when:
+    - inventory_hostname in groups['servers']
+    - hostvars[inventory_hostname]['primary'] | default(false) | bool
+  run_once: true
+  tags: k3s, k3s-primary
+
+- name: Update the kubeconfig to use the correct server address
+  ansible.builtin.replace:
+    path: "{{ role_path }}/../../kubeconfig.yaml"
+    regexp: '127\.0\.0\.1'
+    replace: "{{ k3s_url }}"
+  delegate_to: localhost
+  run_once: true
+  tags: k3s, k3s-primary
+
+- name: Verify k3s nodes
+  kubernetes.core.k8s_info:
+    kind: Node
+    kubeconfig: "{{ role_path }}/../../kubeconfig.yaml"
+  register: k3s_nodes
+  delegate_to: localhost
+  run_once: true
+  tags: k3s, k3s-primary
+
+- name: Dump the node lists
+  ansible.builtin.debug:
+    msg: "Nodes: {{ k3s_nodes.resources | map(attribute='metadata.name') | list }}"
+  delegate_to: localhost
+  run_once: true
+  tags: k3s
+
 # - name: Re-enable SELinux if it was enforcing
 #   block:
 #   - name: Restorecon the k3s binary

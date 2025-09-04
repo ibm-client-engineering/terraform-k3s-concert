@@ -9,7 +9,8 @@
     ansible_python_interpreter_fallback: ['python3.13', 'python3.12', 'python3.11', 'python3.10', 'python3.9', 'python3.8', '/usr/bin/python3', 'python3']
   roles:
     - { role: config-hosts, when: "inventory_hostname not in groups['loadbalancer']" }
-    - { role: install-k3s, when: "inventory_hostname in groups['k3s_cluster']" }
+    - { role: install-k3s, when: "'k3s_cluster' in group_names" }
+    - { role: install-concert }
 #    - role
 #    - config-mailcow
 #    - install-aiops
