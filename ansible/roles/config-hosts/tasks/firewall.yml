@@ -44,4 +44,5 @@
     ansible.builtin.command: setenforce 1
     when: selinux_status.stdout == "Enforcing"
 
+  when: "'nfs' not in group_names"
   tags: firewall

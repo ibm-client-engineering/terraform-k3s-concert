@@ -116,7 +116,6 @@
   ansible.builtin.command: >
     /usr/local/bin/k3s_install.sh
   environment:
-#    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ k3s_selinux == 'false' | ternary('true', 'false') }}"
     INSTALL_K3S_SKIP_SELINUX_RPM: "{{ 'true' if k3s_selinux == 'false' else 'false' }}"
     INSTALL_K3S_EXEC: "{{ install_k3s_exec.standby_env }}"
     K3S_URL: "https://{{ k3s_url }}:6443"
@@ -133,7 +132,6 @@
   ansible.builtin.command: >
     /usr/local/bin/k3s_install.sh
   environment:
-#    INSTALL_K3S_SKIP_SELINUX_RPM: "{{ k3s_selinux == 'false' | ternary('true', 'false') }}"
     INSTALL_K3S_SKIP_SELINUX_RPM: "{{ 'true' if k3s_selinux == 'false' else 'false' }}"
     INSTALL_K3S_EXEC: "{{ install_k3s_exec.agent_env }}"
     K3S_URL: "https://{{ k3s_url }}:6443"
@@ -179,6 +177,16 @@
   run_once: true
   tags: k3s
 
+# traefik keeps getting installed. This seems to be the only way to get rid of it.
+- name: Restart the k3s service to ensure it picks up the config changes
+  ansible.builtin.systemd:
+    name: k3s
+    state: restarted
+    enabled: true
+  when:
+    - inventory_hostname in groups['servers']
+    - hostvars[inventory_hostname]['primary'] | default(false) | bool
+  tags: k3s, k3s-primary
 # - name: Re-enable SELinux if it was enforcing
 #   block:
 #   - name: Restorecon the k3s binary

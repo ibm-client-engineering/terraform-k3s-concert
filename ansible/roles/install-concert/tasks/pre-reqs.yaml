@@ -22,13 +22,20 @@
           replicas: "2"
         externalSnapshotter:
           enabled: "false"
-#      set_values:
-#        - controller.runOnControlPlane: "true"
-#        - controller.replicas: "2"
-#        - controller.strategyType: "RollingUpdate"
-#        - externalSnapshotter.enabled: "false"
       wait: true
-#      timeout: "300"
+
+  - name: Render the storage class manifest
+    ansible.builtin.template:
+      src: storage-class.yaml.j2
+      dest: /tmp/storage-class.yaml
+
+  - name: Create the NFS Storage Class
+    kubernetes.core.k8s:
+      name: nfs-csi
+#      binary_path: /usr/local/bin/helm
+      kubeconfig: "{{ role_path }}/../../kubeconfig.yaml"
+      src: /tmp/storage-class.yaml
+      state: present
 
   - name: Install the nginx ingress helm repo
     kubernetes.core.helm_repository:
@@ -68,7 +75,7 @@
       values:
         crds:
           enabled: true
-      wait: true
+      wait: false
 
   delegate_to: localhost
   run_once: true

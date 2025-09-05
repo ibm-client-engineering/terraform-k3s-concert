@@ -6,6 +6,7 @@ aiops_version: '4.10.1'
 mailcow_enabled: false
 # rhsm_user: 'myuser'
 # rhsm_pass: 'mypassword'
+domain: "gym.lan"
 
 firewall_ports_server:
   - 6443/tcp   # Kubernetes API server
@@ -23,13 +24,18 @@ firewall_ports_agent:
   - 10250/tcp # Kubelet API
   - 5001/tcp # Harbor
 
+firewall_services_nfs:
+  - nfs
+  - rpc-bind
+  - mountd
+
 firewall_trusted:
   - 10.42.0.0/16  # Flannel network
   - 10.43.0.0/16  # service network
 
 vg_group: "k3s_vg"
 
-k3s_url: "haproxy.gym.lan"
+k3s_url: "haproxy.{{ domain }}"
 # We can generate this token later if we want. For now, hardcode it.
 k3s_token: "P@ssw0rd!"
 
@@ -37,7 +43,9 @@ k3s_install_script_url: "https://get.k3s.io"
 
 k3s_selinux: "false"
 
-domain: "gym.lan"
+nfs_server: "nfs-server.{{ domain }}"
+nfs_share: "/nfs-share/shared"
+nfs_class_name: "nfs-csi"
 
 # Skip SELinux stuff for now. We'll turn off SELinux when we install and then restorecon the k3s binary
 install_k3s_exec:
@@ -47,3 +55,19 @@ install_k3s_exec:
 
 # Specific versions of stuff
 certmanager_version: "v1.18.2"
+concert_version: "v2.0.0.2"
+
+concert_download_url: "https://github.com/IBM/Concert/releases/download/{{ concert_version }}/ibm-concert.tar.gz"
+concert_namespace: "concert"
+concert_hub_namespace: "concert-hub"
+concert_hub_storage_class: "{{ nfs_class_name }}"
+concert_storage_class: "{{ nfs_class_name }}"
+concert_user: "admin"
+concert_password: "P@ssw0rd!"
+ibm_entitlement_key: ""
+reg_username: "cp"
+registry: "cp.icr.io"
+
+# Not sure what these do exactly, but we'll set them to level_2 for now
+scale_config_concert: "level_2"
+scale_config_hub: "level_2"

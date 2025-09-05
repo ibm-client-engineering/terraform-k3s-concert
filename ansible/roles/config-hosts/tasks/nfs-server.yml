@@ -1,0 +1,36 @@
+# Let's export the directory
+- name: Do the NFS dance
+  block:
+  - name: Create the NFS exports file
+    ansible.builtin.template:
+      src: exports.j2
+      dest: /etc/exports
+      mode: '0644'
+
+  - name: Export the NFS shares
+    ansible.builtin.command: exportfs -ra
+#    notify: Restart NFS
+
+  - name: Ensure NFS is started and enabled
+    ansible.builtin.systemd:
+      name: nfs-server
+      state: started
+      enabled: true
+
+  - name: Check if firewalld is active
+    ansible.builtin.command: systemctl is-active firewalld
+    register: firewalld_status
+    changed_when: false
+    failed_when: false
+
+  - name: Open NFS related ports in the firewall
+    ansible.posix.firewalld:
+      service: "{{ item }}"
+      permanent: true
+      state: enabled
+      immediate: yes
+      zone: public
+    loop: "{{ firewall_services_nfs }}"
+    when: firewalld_status.stdout == "active"
+  when: "'nfs' in group_names"
+  tags: nfs

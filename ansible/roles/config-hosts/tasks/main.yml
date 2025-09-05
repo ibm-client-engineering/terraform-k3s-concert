@@ -10,9 +10,11 @@
   - name: Configure storage
     include_tasks: storage.yml
     tags: storage
+  - name: Configure NFS server
+    include_tasks: nfs-server.yml
+    tags: nfs
   - name: Open Firewall ports
     include_tasks: firewall.yml
     tags: firewall
 # Might be redundant with the k3s role doing this
   when: "'k3s_cluster' in group_names or 'nfs' in group_names"
-#  when: inventory_hostname in groups['servers'] or inventory_hostname in groups['agents']
