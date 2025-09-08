@@ -1,0 +1,36 @@
+# We're going to put all this in a block since it needs to happen from localhost, or wherever ansible is running
+- name: Install Concert
+  block:
+  - name: Download the Concert tarball
+    ansible.builtin.get_url:
+      url: "{{ concert_download_url }}"
+      dest: "/tmp/ibm-concert.tar.gz"
+      mode: '0644'
+      force: no
+
+  - name: Extract the Concert tarball
+    ansible.builtin.unarchive:
+      src: "/tmp/ibm-concert.tar.gz"
+      dest: /tmp/
+      remote_src: yes
+
+  - name: Configure the params file
+    ansible.builtin.template:
+      src: params.ini.j2
+      dest: /tmp/ibm-concert/etc/params.ini
+      mode: '0644'
+  
+  - name: Install Concert
+    ansible.builtin.command: 
+      argv:
+        - /tmp/ibm-concert/bin/setup
+        - --license_acceptance=y
+        - --username={{ concert_user }}
+        - --password={{ concert_password }}
+        - --registry_password={{ ibm_entitlement_key }}
+    environment:
+      KUBECONFIG: "{{ role_path }}/../../kubeconfig.yaml"
+
+  run_once: true
+  delegate_to: localhost
+  tags: install_concert, concert

@@ -1,0 +1,21 @@
+REG_USER={{ reg_username }}
+PATH=$PATH:/usr/local/bin
+#KUBECONFIG=
+
+ #hub namespace
+HUB_NS={{ concert_hub_namespace }}
+ # concert namespace
+CONCERT_NS={{ concert_namespace }}
+ # Hub scale config, set from level_1 to level_3
+SCALE_CONFIG_HUB={{ scale_config_hub }}
+ # Concert scale config, set from  level_1 to level_4
+SCALE_CONFIG_CONCERT={{ scale_config_concert }}
+ #set the storage class for Hub
+STORAGE_CLASS_HUB={{ concert_hub_storage_class }}
+ #set the storage class for Concert
+STORAGE_CLASS_CONCERT={{ concert_storage_class }}
+
+INSTALL_CONCERT=true
+IMAGE_REGISTRY_PREFIX={{ registry }}/cp
+HUB_IMAGE_REGISTRY_SUFFIX=/solis-hub
+CONCERT_IMAGE_REGISTRY_SUFFIX=/concert

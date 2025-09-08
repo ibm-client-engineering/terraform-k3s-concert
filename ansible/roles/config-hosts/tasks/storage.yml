@@ -169,7 +169,7 @@
   - name: Set the perms for nfs storage
     ansible.builtin.file:
       path: /nfs-share
-      mode: '2777'
+      mode: '3777'
       owner: nobody
       group: nobody
       recurse: true
@@ -180,7 +180,7 @@
     ansible.builtin.file:
       path: /nfs-share/shared
       state: directory
-      mode: '2777'
+      mode: '3777'
       owner: nobody
       group: nobody
       recurse: true
@@ -190,7 +190,7 @@
   - name: set the ACL for nfs storage
     ansible.posix.acl:
       path: /nfs-share
-#      entity: o
+#      entity: nobody
       etype: other
       permissions: rwx
       state: present
@@ -200,19 +200,23 @@
   - name: set the ACL for nfs storage shared for users
     ansible.posix.acl:
       path: /nfs-share/shared
+      entity: nobody
       etype: user
       permissions: rwx
       state: present
       recursive: true
+      default: true
     when: "'nfs' in group_names"
 
   - name: set the ACL for nfs storage shared for groups
     ansible.posix.acl:
       path: /nfs-share/shared
+      entity: nobody
       etype: group
       permissions: rwx
       state: present
       recursive: true
+      default: true
     when: "'nfs' in group_names"
 
   - name: set the ACL for nfs storage shared for others
@@ -221,6 +225,8 @@
       etype: other
       permissions: rwx
       state: present
+      recursive: true
+      default: true
     when: "'nfs' in group_names"
 
 #  when: inventory_hostname in groups['k3s_cluster'] or inventory_hostname in groups['nfs']
