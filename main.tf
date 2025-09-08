@@ -66,3 +66,13 @@ resource "local_file" "ansible_inventory" {
     use_nfs = var.use_nfs
   })
 }
+
+# Render a sub file to use for ansible. This will have our entitlement key as well as our RHSM creds
+resource "local_file" "ansible_subs" {
+  filename = "${path.module}/ansible/rhel_sub.yaml"
+  content  = templatefile("${path.module}/templates/rhel_sub.yaml.tpl", {
+    rhsm_user       = var.rhsm_username
+    rhsm_pass       = var.rhsm_password
+    ibm_entitlement_key = var.ibm_entitlement_key
+  })
+}
