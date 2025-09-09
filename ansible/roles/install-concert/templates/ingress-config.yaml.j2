@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: concert-ingress
+  namespace: "{{ concert_namespace }}"
+{% if not concert_tls_enabled %}
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+{% endif %}
+spec:
+  rules:
+    - host: {{ concert_hostname }}
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: ibm-concert-solis-gw-svc
+              port:
+                number: 11443
+  ingressClassName: nginx
+{% if concert_tls_enabled %}
+  tls:
+    - hosts:
+      - {{ concert_hostname }}
+      secretName: {{ concert_tls_secret }}
+{% endif %}
+    
+

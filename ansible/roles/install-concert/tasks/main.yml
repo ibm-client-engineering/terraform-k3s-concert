@@ -8,3 +8,7 @@
 - name: Install concert
   include_tasks: concert.yaml
   tags: install_concert, concert
+
+- name: Configure Ingress for Concert
+  include_tasks: ingress.yaml
+  tags: ingress

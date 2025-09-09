@@ -53,6 +53,10 @@
       chart_ref: ingress-nginx/ingress-nginx
       namespace: ingress-nginx
       create_namespace: true
+      values:
+        controller:
+          extraArgs:
+            enable-ssl-passthrough: "true"
       wait: true
 
 #  - name: Install the community cert-manager helm repo

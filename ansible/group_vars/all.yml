@@ -64,6 +64,10 @@ concert_hub_storage_class: "{{ nfs_class_name }}"
 concert_storage_class: "{{ nfs_class_name }}"
 concert_user: "admin"
 concert_password: "P@ssw0rd!"
+concert_hostname: "concert.{{ domain }}"
+concert_tls_secret: "concert-tls"
+concert_tls_enabled: false
+
 ibm_entitlement_key: ""
 reg_username: "cp"
 registry: "cp.icr.io"
