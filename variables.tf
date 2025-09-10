@@ -220,3 +220,15 @@ variable "private_registry_skip_tls" {
   type        = bool
   description = "Skip TLS verification for private registry"
 }
+
+variable "kickoff_ansible" {
+  default     = false
+  type        = bool
+  description = "Kick off the Ansible playbook to install everything after the cluster is built"
+}
+
+variable "remote_user" {
+  type    = string
+  default = "clouduser"
+  description = "User to use for ssh connections to the nodes"
+} 

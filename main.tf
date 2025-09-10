@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    ansible = {
+      source  = "ansible/ansible"
+      version = "~> 1.3"
+    }
     # pfsense = {
     #   source = "marshallford/pfsense"
     #   version = "0.20.0"
@@ -34,6 +38,8 @@ resource "random_password" "k3s_token" {
 
 locals {
   # build the private registry URL
+  ssh_key = "../${path.module}/id_rsa"
+  inventory = "../${path.module}/inventory.ini"
   private_registry = var.private_registry_repo != "" ? "${var.private_registry_host}:${var.private_registry_port}/${var.private_registry_repo}" : "${var.private_registry_host}:${var.private_registry_port}"
 
   total_nodes = var.k3s_server_count + var.k3s_agent_count
@@ -56,7 +62,7 @@ locals {
 
 # Render our ansible inventory file
 resource "local_file" "ansible_inventory" {
-  filename = "${path.module}/ansible/inventory.ini"
+  filename = "${path.module}/inventory.ini"
   content  = templatefile("${path.module}/templates/inventory.ini.tpl", {
     server_ips = local.server_ips
     agent_ips  = local.agent_ips
@@ -64,6 +70,8 @@ resource "local_file" "ansible_inventory" {
     nfs_server_ip = var.nfs_server_ip
     use_mailcow = var.use_mailcow
     use_nfs = var.use_nfs
+    remote_user = var.remote_user
+    ssh_key = local.ssh_key
   })
 }
 
@@ -75,4 +83,28 @@ resource "local_file" "ansible_subs" {
     rhsm_pass       = var.rhsm_password
     ibm_entitlement_key = var.ibm_entitlement_key
   })
+}
+
+# Render our ansible.cfg file
+resource "local_file" "ansible_cfg" {
+  filename = "${path.module}/ansible.cfg"
+  content  = templatefile("${path.module}/templates/ansible.cfg.tpl", {
+    remote_user = var.remote_user
+    ssh_key     = "../${path.module}/id_rsa"
+    ssh_key = local.ssh_key
+    inventory  = local.inventory
+  })
+}
+
+resource "ansible_playbook" "k3s_concert" {
+  count        = var.kickoff_ansible ? 1 : 0
+  name = "localhost"
+  playbook     = "${path.module}/ansible/playbook.yaml"
+  replayable = true
+  extra_vars = {
+    rhsm_user           = var.rhsm_username
+    rhsm_pass           = var.rhsm_password
+    ibm_entitlement_key  = var.ibm_entitlement_key
+  }
+  depends_on = [local_file.ansible_cfg, local_file.ansible_inventory, local_file.ansible_subs]
 }
