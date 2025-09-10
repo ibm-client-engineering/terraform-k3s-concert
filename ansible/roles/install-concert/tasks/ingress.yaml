@@ -1,0 +1,18 @@
+- name: Configure and deploy Ingress for Concert
+  block:
+  - name: Template the Ingress configuration
+    ansible.builtin.template:
+      src: ingress-config.yaml.j2
+      dest: /tmp/ingress-config.yaml
+      mode: '0644'
+
+  - name: Apply the Concert Ingress
+    kubernetes.core.k8s:
+      name: concert-ingress
+      kubeconfig: "{{ role_path }}/../../kubeconfig.yaml"
+      src: /tmp/ingress-config.yaml
+      state: present
+
+  run_once: true
+  delegate_to: localhost
+  tags: ingress
